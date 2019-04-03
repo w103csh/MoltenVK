@@ -37,9 +37,15 @@ namespace mvk {
 
 		/** Sets the GLSL source code that is to be converted to the specified null-terminated string. */
 		void setGLSL(const std::string& glslSrc);
+        
+        /**  */
+        void setGLSL(const std::vector<std::string>& glslSrcs);
 
 		/** Returns the GLSL source code that was set using the setGLSL() function. */
 		const std::string& getGLSL();
+        
+        /**  */
+        const std::vector<std::string>& getGLSLs();
 
 		/**
 		 * Converts GLSL code, set with setGLSL(), to SPIR-V code, which can be retrieved using getSPIRV().
@@ -73,7 +79,7 @@ namespace mvk {
 		bool validateSPIRV();
 		void initGLSLCompilerResources();
 
-		std::string _glsl;
+        std::vector<std::string> _glsls;
 		std::vector<uint32_t> _spirv;
 		std::string _resultLog;
 		bool _wasConverted = false;
