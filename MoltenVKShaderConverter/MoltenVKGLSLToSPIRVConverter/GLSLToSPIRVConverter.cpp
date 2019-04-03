@@ -6,9 +6,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,6 +23,7 @@
 #include "MVKStrings.h"
 #include <glslang/SPIRV/GlslangToSpv.h>
 #include <sstream>
+#include <memory>
 
 using namespace std;
 using namespace mvk;
@@ -36,6 +37,19 @@ void configureGLSLCompilerResources(TBuiltInResource* glslCompilerResources);
 
 /** Returns the GLSL compiler language type corresponding to the specified MoltenVK shader stage. */
 EShLanguage eshLanguageFromMVKGLSLConversionShaderStage(const MVKGLSLConversionShaderStage mvkShaderStage);
+
+MVK_PUBLIC_SYMBOL void GLSLToSPIRVConverter::setGLSL(const string& glslSrc) {
+    _glsls.clear();
+    _glsls.push_back(glslSrc);
+}
+
+MVK_PUBLIC_SYMBOL void GLSLToSPIRVConverter::setGLSL(const vector<string>& glslSrcs) {
+    _glsls = vector<string>(glslSrcs);
+}
+
+MVK_PUBLIC_SYMBOL const string& GLSLToSPIRVConverter::getGLSL() { return _glsls.front(); }
+
+MVK_PUBLIC_SYMBOL const vector<string>& GLSLToSPIRVConverter::getGLSLs() { return _glsls; }
 
 MVK_PUBLIC_SYMBOL bool GLSLToSPIRVConverter::convert(MVKGLSLConversionShaderStage shaderStage,
 													 bool shouldLogGLSL,
@@ -51,34 +65,36 @@ MVK_PUBLIC_SYMBOL bool GLSLToSPIRVConverter::convert(MVKGLSLConversionShaderStag
 	EShLanguage stage = eshLanguageFromMVKGLSLConversionShaderStage(shaderStage);
 	TBuiltInResource glslCompilerResources;
 	configureGLSLCompilerResources(&glslCompilerResources);
-	const char *glslStrings[1];
-	glslStrings[0] = _glsl.data();
-
-	// Create and compile a shader from the source code
-	glslang::TShader glslShader(stage);
-	glslShader.setStrings(glslStrings, 1);
-	if (glslShader.parse(&glslCompilerResources, 100, false, messages)) {
-		if (shouldLogGLSL) {
-			logMsg(glslShader.getInfoLog());
-			logMsg(glslShader.getInfoDebugLog());
-		}
-	} else {
-		logError(glslShader.getInfoLog());
-		logError(glslShader.getInfoDebugLog());
-		return logError("Error compiling GLSL when converting GLSL to SPIR-V.");
-	}
-
-	// Create and link a shader program containing the single shader
-	glslang::TProgram glslProgram;
-	glslProgram.addShader(&glslShader);
-	if ( !glslProgram.link(messages) ) {
-		logError(glslProgram.getInfoLog());
-		logError(glslProgram.getInfoDebugLog());
+    std::vector<std::unique_ptr<glslang::TShader> > glslShaders;
+    glslang::TProgram glslProgram;
+    
+    // Create and compile a shader from the source code
+    for (auto glsl : _glsls) {
+        glslShaders.emplace_back(new glslang::TShader(stage));
+        const char * glslStrings = glsl.c_str();
+        glslShaders.back()->setStrings(&glslStrings, 1);
+        if (glslShaders.back()->parse(&glslCompilerResources, 100, false, messages)) {
+            if (shouldLogGLSL) {
+                logMsg(glslShaders.back()->getInfoLog());
+                logMsg(glslShaders.back()->getInfoDebugLog());
+            }
+        } else {
+            logError(glslShaders.back()->getInfoLog());
+            logError(glslShaders.back()->getInfoDebugLog());
+            return logError("Error compiling GLSL when converting GLSL to SPIR-V.");
+        }
+        glslProgram.addShader(glslShaders.back().get());
+    }
+    
+    // Create and link a shader program containing the single shader
+    if (!glslProgram.link(messages)) {
+        logError(glslProgram.getInfoLog());
+        logError(glslProgram.getInfoDebugLog());
 		return logError("Error creating GLSL program when converting GLSL to SPIR-V.");
-	}
-
+    }
+    
 	// Output the SPIR-V code from the shader program
-	glslang::GlslangToSpv(*glslProgram.getIntermediate(stage), _spirv);
+    glslang::GlslangToSpv(*glslProgram.getIntermediate(stage), _spirv);
 
 	if (shouldLogSPIRV) { logSPIRV("Converted"); }
 
@@ -125,8 +141,8 @@ bool GLSLToSPIRVConverter::validateSPIRV() {
 void GLSLToSPIRVConverter::logGLSL(const char* opDesc) {
 	_resultLog += opDesc;
 	_resultLog += " GLSL:\n";
-	_resultLog += _glsl;
-	_resultLog += "\nEnd GLSL\n\n";
+    for (const auto& glsl : _glsls) _resultLog += glsl + "\n";
+	_resultLog += "End GLSL\n\n";
 }
 
 
