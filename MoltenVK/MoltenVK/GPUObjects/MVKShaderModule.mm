@@ -409,7 +409,7 @@ MVKShaderModule::MVKShaderModule(MVKDevice* device,
 				codeHash = mvkHash(pGLSL, codeSize);
 				_device->addActivityPerformance(_device->_performanceStatistics.shaderCompilation.hashShaderCode, startTime);
 
-				_glslConverter.setGLSL(pGLSL, glslLen);
+                _glslConverter.setGLSL({string(pGLSL, glslLen)});
 			} else {
 				setConfigurationResult(reportError(VK_ERROR_INVALID_SHADER_NV, "vkCreateShaderModule(): The SPIR-V contains an invalid magic number %x.", magicNum));
 			}
